@@ -1,0 +1,21 @@
+{
+  "name": "@devctrl/lib-communicator",
+  "version": "3.0.0",
+  "description": "Common files for devctrl device communicators",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@bitbucket.org/ufdwi/devctrl-lib-communicator.git"
+  },
+  "author": "Chris Ribe",
+  "license": "GPL-3.0",
+  "homepage": "https://bitbucket.org/ufdwi/devctrl-lib-communicator#readme",
+  "dependencies": {
+    "@devctrl/common": "^3.0.0",
+    "@types/node": "^8.0.52",
+    "sprintf-js": "^1.1.1"
+  }
+}
