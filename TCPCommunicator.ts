@@ -223,7 +223,7 @@ export class TCPCommunicator extends EndpointCommunicator {
     onEnd() {
         let self = this;
         if (this.config.endpoint.enabled) {
-            this.log("device disconnected " + this.host + ", reconnect in " + this.backoffTime + "ms", "connection");
+            this.log("device disconnected " + this.host + ", reconnect in " + this.backoffTime + "ms", EndpointCommunicator.LOG_CONNECTION);
             this.connected = false;
 
             this.config.statusUpdateCallback(EndpointStatus.Offline);
