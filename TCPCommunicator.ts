@@ -39,9 +39,6 @@ export class TCPCommunicator extends EndpointCommunicator {
     }
 
     connect() {
-
-        let self = this;
-
         this.host = this.config.endpoint.ip;
         this.port = this.config.endpoint.port;
 
@@ -51,27 +48,27 @@ export class TCPCommunicator extends EndpointCommunicator {
         };
 
         console.log(`opening TCP connection to ${connectOpts.host}:${connectOpts.port}`);
-        this.socket = net.connect(connectOpts, function() {
-            self.log("connected to " + connectOpts.host + ":" + connectOpts.port, EndpointCommunicator.LOG_CONNECTION);
+        this.socket = net.connect(connectOpts, () => {
+            this.log("connected to " + connectOpts.host + ":" + connectOpts.port, EndpointCommunicator.LOG_CONNECTION);
 
-            self.doDeviceLogon();
+            this.doDeviceLogon();
         });
 
-        this.socket.on('error', function(e) {
-            self.log("caught socket error: " + e.message, EndpointCommunicator.LOG_CONNECTION);
-            self.onEnd();
+        this.socket.on('error', (e) => {
+            this.log("caught socket error: " + e.message, EndpointCommunicator.LOG_CONNECTION);
+            this.onEnd();
         });
 
-        this.socket.on('data', function(data) {
-            self.onData(data);
+        this.socket.on('data', (data) => {
+            this.onData(data);
         });
-        this.socket.on('end', function() {
-            self.onEnd();
+        this.socket.on('end', () => {
+            this.onEnd();
         });
 
         if (! this.pollTimer) {
-            this.pollTimer = setInterval(function () {
-                self.poll();
+            this.pollTimer = setInterval(() => {
+                this.poll();
             }, 10000);
         }
     }
@@ -97,7 +94,6 @@ export class TCPCommunicator extends EndpointCommunicator {
             return;
         }
 
-        let self = this;
         let queryStr = cmd.queryString();
         this.log("sending query: " + queryStr, EndpointCommunicator.LOG_POLLING);
         this.writeToSocket(queryStr + this.outputLineTerminator);
@@ -106,13 +102,13 @@ export class TCPCommunicator extends EndpointCommunicator {
             cmd.queryResponseMatchString(),
             (line) => {
                 for (let ctid of cmd.ctidList) {
-                    let control = self.controlsByCtid[ctid];
+                    let control = this.controlsByCtid[ctid];
                     //debug("control id is " + control._id);
                     let val = cmd.parseQueryResponse(control, line);
-                    self.setControlValue(control, val);
+                    this.setControlValue(control, val);
                 }
 
-                self.connectionConfirmed();
+                this.connectionConfirmed();
             }
         ]);
     }
@@ -221,7 +217,6 @@ export class TCPCommunicator extends EndpointCommunicator {
     }
 
     onEnd() {
-        let self = this;
         if (this.config.endpoint.enabled) {
             this.log("device disconnected " + this.host + ", reconnect in " + this.backoffTime + "ms", EndpointCommunicator.LOG_CONNECTION);
             this.connected = false;
@@ -233,8 +228,8 @@ export class TCPCommunicator extends EndpointCommunicator {
                 this.socket.destroy();
             }
 
-            setTimeout(function () {
-                self.connect();
+            setTimeout(() => {
+                this.connect();
             }, this.backoffTime);
 
             if (this.backoffTime < 20000) {
