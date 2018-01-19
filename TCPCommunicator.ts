@@ -211,7 +211,7 @@ export class TCPCommunicator extends EndpointCommunicator {
         let lines = this.inputBuffer.split(this.inputLineTerminator);
 
         while (lines.length > 1) {
-            this.log("data recieved: " + lines[0], EndpointCommunicator.LOG_RAW_DATA);
+            this.log("data received: " + lines[0], EndpointCommunicator.LOG_RAW_DATA);
             this.processLine(lines[0]);
 
             lines.splice(0,1);

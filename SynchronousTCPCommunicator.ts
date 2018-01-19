@@ -46,7 +46,7 @@ export class SynchronousTCPCommunicator extends TCPCommunicator {
             strData = data.toString('hex');
         }
 
-        this.log("data recieved: " + strData, EndpointCommunicator.LOG_RAW_DATA);
+        this.log("data received: " + strData, EndpointCommunicator.LOG_RAW_DATA);
 
         this.inputBuffer += strData;
         let lines = this.inputBuffer.split(this.inputLineTerminator);
