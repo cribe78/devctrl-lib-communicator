@@ -1,6 +1,6 @@
 {
   "name": "@devctrl/lib-communicator",
-  "version": "3.0.2",
+  "version": "3.0.3",
   "description": "Common files for devctrl device communicators",
   "main": "index.js",
   "scripts": {
