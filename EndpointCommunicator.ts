@@ -57,6 +57,7 @@ export class EndpointCommunicator {
     static LOG_RAW_DATA = "rawData";
     static LOG_CONNECTION = "connection";
     static LOG_UPDATES = "updates";
+    static LOG_DATA_MODEL = "dataModel";
 
     /**
      * A function to log messages.  Determine which messages to log by setting the commLogOptions value on a
