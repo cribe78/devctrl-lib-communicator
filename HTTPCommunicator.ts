@@ -1,10 +1,10 @@
 import {
     Control,
     ControlUpdateData,
-    EndpointStatus,
+    IEndpointStatus,
     IndexedDataSet
 } from "@devctrl/common";
-import {EndpointCommunicator} from "./EndpointCommunicator";
+import {EndpointCommunicator, IEndpointCommunicatorConfig} from "./EndpointCommunicator";
 import {HTTPCommand} from "./HTTPCommand";
 import * as http from "http";
 
@@ -13,26 +13,20 @@ export class HTTPCommunicator extends EndpointCommunicator {
     commandsByControl: IndexedDataSet<HTTPCommand> = {};
     pollTimer;
 
-    constructor() {
-        super();
+    constructor(config: IEndpointCommunicatorConfig) {
+        super(config);
     }
 
     buildCommandList() : void {}
 
-    connect() {
-        this._connected = true;
-        this.config.statusUpdateCallback(EndpointStatus.Online);
 
-        if (! this.pollTimer) {
-            this.pollTimer = setInterval(() => {
-                this.poll();
-            }, 10000);
-        }
-    };
+    closeConnection() {
+        // Not really much to do here, no persistent connection is maintained
+        this.updateStatus({
+            polling: false,
+            responsive: false
+        });
 
-    disconnect() {
-        this._connected = false;
-        this.config.statusUpdateCallback(EndpointStatus.Offline);
     };
 
     executeCommandQuery(cmd: HTTPCommand) {
@@ -64,6 +58,7 @@ export class HTTPCommunicator extends EndpointCommunicator {
                     if (typeof val !== 'undefined') {
                         this.log(`${cmd.name} response parsed: ${body},${val}`, EndpointCommunicator.LOG_POLLING);
                         this.config.controlUpdateCallback(control, val);
+                        this.connectionConfirmed();
                     }
                     else {
                         this.log(`${cmd.name} update response did not match: ${body}`, EndpointCommunicator.LOG_MATCHING);
@@ -73,7 +68,7 @@ export class HTTPCommunicator extends EndpointCommunicator {
         })
             .on('error', (e) => {
                 this.log(`Error on query: ${e.message}`);
-                this.disconnect();
+                this.closeConnection();
             });
     }
 
@@ -128,6 +123,7 @@ export class HTTPCommunicator extends EndpointCommunicator {
                         let newVal = command.parseCommandResponse(body, update.value);
                         this.log(`${control.name} response successful, value: ${newVal}`, EndpointCommunicator.LOG_UPDATES);
                         this.config.controlUpdateCallback(control, newVal);
+                        this.connectionConfirmed();
                     }
                     else {
                         this.log(`${control.name} update response did not match: ${body}`, EndpointCommunicator.LOG_MATCHING);
@@ -136,12 +132,50 @@ export class HTTPCommunicator extends EndpointCommunicator {
             }
         }).on('error', (e) => {
             this.log(`Error on update request: ${e.message}`);
-            this.disconnect();
+            this.closeConnection();
         });
     }
 
+
+    initStatus() {
+        let es = this.epStatus;
+        es.reachable = false;
+        es.connected = false;
+        es.loggedIn = false;
+        es.polling = false;
+        es.responsive = false;
+        es.ok = false;
+
+        this.launchPing();
+    }
+
+    online() {
+        if (! this.monitorTimer) {
+            this.monitorTimer = setInterval(()=> {
+                let offset = Date.now() - this.lastConfirmedCommunication;
+
+                if (offset > 30000) {
+                    this.updateStatus({ responsive: false });
+                }
+            }, 30000);
+        }
+
+
+
+        if (! this.pollTimer) {
+            this.pollTimer = setInterval(() => {
+                this.poll();
+            }, 10000);
+        }
+
+        this.updateStatus({
+            polling: true
+        });
+    };
+
+
     poll() {
-        if (! this.connected) {
+        if (! this.epStatus.polling) {
             return;
         }
 
@@ -162,4 +196,108 @@ export class HTTPCommunicator extends EndpointCommunicator {
             }
         }
     }
+
+
+    updateStatus(statusChanges: IEndpointStatus) {
+        let statusDiff= this.config.endpoint.statusDiff(statusChanges);
+        let statusUnchanged = this.config.endpoint.compareStatus(statusChanges);
+        let es = this.epStatus;
+
+        if (! (es === this.config.endpoint.epStatus)) {
+            this.log("epStatus mismathc!!!", EndpointCommunicator.LOG_STATUS);
+        }
+
+        let diffStr = "";
+        // Set the new values
+        for (let f in statusDiff) {
+            es[f] = statusDiff[f];
+            diffStr += f;
+            diffStr += " ";
+        }
+
+        // connected and loggedIn don't apply, they should always mirror polling
+        es.connected = es.loggedIn = es.polling;
+
+
+        let statusStr = this.endpoint.statusStr;
+        this.log("status update: " + statusStr, EndpointCommunicator.LOG_STATUS);
+
+        if (! statusUnchanged) {
+            //this.log("status diff: " + diffStr, EndpointCommunicator.LOG_STATUS);
+            this.config.statusUpdateCallback(es);
+        }
+
+
+        // Figure out what to do next
+        if (! es.enabled) {
+            if (! es.reachable) {
+                if (! es.connected) {
+                    if (! es.loggedIn) {
+                        if (! es.polling) {
+                            if (!es.responsive) {
+                                if (!es.ok) {
+                                    // Stopped.  Nothing to do.
+                                    return;
+                                }
+                                else {  // ok
+                                    if (es.messengerConnected) {
+                                        // Not really ok, update accordingly
+                                        this.updateStatus({ok: false});
+                                        return;
+                                    }
+                                }
+                            }
+                            else { // responsive
+                                this.closeConnection();
+                                return;
+                            }
+                        }
+                        else { // polling
+                            this.closeConnection();
+                            return;
+                        }
+                    }
+                    else { // loggedIn
+                        this.closeConnection();
+                        return;
+                    }
+                }
+                else { // connected
+                    this.closeConnection();
+                    return;
+                }
+            }
+            else { // reachable
+                if (es.connected) {
+                    this.closeConnection();
+                    return;
+                }
+            }
+        }
+        else { // enabled
+            if (! es.reachable) {
+                // Enabled, not reachable, nothing to do
+                return;
+            }
+            else { // reachable
+                if (! es.polling) {
+                    this.online();
+                }
+                else { // polling
+                    if (! es.responsive) {
+                        if (statusDiff.responsive === false) {
+                            // Disconnect and attempt to reconnect
+                            this.closeConnection();
+                        }
+                    }
+                    else { // responsive
+                        if (! es.ok) {
+                            this.updateStatus({ok : true });
+                        }
+                    }
+                }
+            }
+        }
+    }
+
 }

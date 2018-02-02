@@ -1,12 +1,14 @@
-import {EndpointCommunicator} from "./EndpointCommunicator";
+import {EndpointCommunicator, IEndpointCommunicatorConfig} from "./EndpointCommunicator";
 import { TCPCommand } from "./TCPCommand";
 import * as net from "net";
 import {
     Control,
     ControlUpdateData,
-    EndpointStatus,
+    Endpoint,
+    IEndpointStatus,
     IndexedDataSet
 } from "@devctrl/common";
+
 
 
 export type TCPCommEncoding = "string" | "hex";
@@ -14,8 +16,6 @@ export type TCPCommEncoding = "string" | "hex";
 //TODO: convert expectedResponse from an array to a proper object
 
 export class TCPCommunicator extends EndpointCommunicator {
-    host: string;
-    port : number;
     socket: net.Socket;
     commands: IndexedDataSet<TCPCommand> = {};
     commandsByTemplate: IndexedDataSet<TCPCommand> = {};
@@ -23,70 +23,46 @@ export class TCPCommunicator extends EndpointCommunicator {
     outputLineTerminator = '\r\n';
     socketEncoding = 'utf8';
     inputBuffer: string = '';
-    pollTimer: any = 0;
-    backoffTime: number = 1000;
+
+
     expectedResponses: [string | RegExp, (line: string) => any][] = [];
     commsMode : TCPCommEncoding = "string";
 
+    closingConnection = false;
+    openingConnection = false;
+    protected lastConnectAttemptTime = 0;
 
 
-    constructor() {
-        super();
+
+    constructor(config: IEndpointCommunicatorConfig) {
+        super(config);
     }
 
     buildCommandList() {
 
     }
 
-    connect() {
-        this.host = this.config.endpoint.ip;
-        this.port = this.config.endpoint.port;
-
-        let connectOpts = {
-            port: this.config.endpoint.port,
-            host: this.config.endpoint.ip
-        };
-
-        console.log(`opening TCP connection to ${connectOpts.host}:${connectOpts.port}`);
-        this.socket = net.connect(connectOpts, () => {
-            this.log("connected to " + connectOpts.host + ":" + connectOpts.port, EndpointCommunicator.LOG_CONNECTION);
-
-            this.doDeviceLogon();
-        });
-
-        this.socket.on('error', (e) => {
-            this.log("caught socket error: " + e.message, EndpointCommunicator.LOG_CONNECTION);
-            this.onEnd();
-        });
-
-        this.socket.on('data', (data) => {
-            this.onData(data);
-        });
-        this.socket.on('end', () => {
-            this.onEnd();
-        });
-
-        if (! this.pollTimer) {
-            this.pollTimer = setInterval(() => {
-                this.poll();
-            }, 10000);
+    closeConnection() {
+        if (this.openingConnection) {
+            this.log("openingConnection in progress, skipping close connection", EndpointCommunicator.LOG_CONNECTION);
+            return;
+        }
+        if (! this.closingConnection) {
+            this.closingConnection = true;
+            this.socket.end();
+        }
+        else {
+            this.log("closing connection already in process", EndpointCommunicator.LOG_CONNECTION);
         }
     }
 
-    connectionConfirmed() {
-        this.backoffTime = 1000;
-    }
 
-    disconnect() {
-        this.socket.end();
-        this.connected = false;
-        this.config.statusUpdateCallback(EndpointStatus.Offline);
-    }
 
     doDeviceLogon() {
-        this.connected = true;
-        this.config.statusUpdateCallback(EndpointStatus.Online);
-        this.online();
+        // Dummy method, update status and return
+        this.updateStatus( {
+            loggedIn: true,
+        });
     };
 
     executeCommandQuery(cmd: TCPCommand) {
@@ -133,7 +109,10 @@ export class TCPCommunicator extends EndpointCommunicator {
     handleControlUpdateRequest(request: ControlUpdateData) {
         let control = this.controls[request.control_id];
 
-        if (! this.connected) {
+        if (! this.epStatus.ok) {
+            // Update can't be processed, remind
+            this.log("update cannot be processed, communicator not connected", EndpointCommunicator.LOG_UPDATES);
+            this.config.statusUpdateCallback(this.epStatus);
             return;
         }
 
@@ -141,7 +120,7 @@ export class TCPCommunicator extends EndpointCommunicator {
 
         if (command) {
             let updateStr = command.updateString(control, request);
-            this.log("sending update: " + updateStr, EndpointCommunicator.LOG_UPDATES);
+            this.log("queueing update: " + updateStr, EndpointCommunicator.LOG_UPDATES);
 
             this.queueCommand(updateStr + this.outputLineTerminator,
                 [
@@ -157,6 +136,23 @@ export class TCPCommunicator extends EndpointCommunicator {
             this.indeterminateControls[request.control_id] = true;
         }
     }
+
+
+
+
+    initStatus() {
+        let es = this.epStatus;
+        es.reachable = false;
+        es.connected = false;
+        es.loggedIn = false;
+        es.polling = false;
+        es.responsive = false;
+        es.ok = false;
+
+        this.launchPing();
+    }
+
+
 
 
     matchLineToCommand(line: string) : TCPCommand | boolean {
@@ -217,39 +213,104 @@ export class TCPCommunicator extends EndpointCommunicator {
     }
 
     onEnd() {
-        if (this.config.endpoint.enabled) {
-            this.log("device disconnected " + this.host + ", reconnect in " + this.backoffTime + "ms", EndpointCommunicator.LOG_CONNECTION);
-            this.connected = false;
-
-            this.config.statusUpdateCallback(EndpointStatus.Offline);
-
-            if (! this.socket["destroyed"]) {  // socket.destroyed is missing from Typings file
-                this.log("destroying socket", EndpointCommunicator.LOG_CONNECTION);
-                this.socket.destroy();
-            }
-
-            setTimeout(() => {
-                this.connect();
-            }, this.backoffTime);
-
-            if (this.backoffTime < 20000) {
-                this.backoffTime = this.backoffTime * 2;
-            }
+        this.log("device disconnected : " + this.endpoint.address);
+        if (this.backoffTime < 20000) {
+            this.backoffTime = this.backoffTime * 2;
         }
-        else {
-            this.log("successfully disconnected from " + this.host, EndpointCommunicator.LOG_CONNECTION);
-        }
+
+        this.closingConnection = false;
+        this.openingConnection = false;
+
+        this.updateStatus({
+            connected: false,
+            loggedIn: false,
+            polling: false,
+            responsive: false
+        });
     }
 
     /**
-     *  Functions to perform when device connection has been confirmed
+     *  Functions to perform after login
      */
     online() {
+
+        if (! this.monitorTimer) {
+            this.monitorTimer = setInterval(()=> {
+                let offset = Date.now() - this.lastConfirmedCommunication;
+
+                if (offset > 30000) {
+                    this.updateStatus({ responsive: false });
+                }
+            }, 30000);
+        }
+
+
         this.queryAll();
+
+        if (! this.pollTimer) {
+            this.pollTimer = setInterval(() => {
+                this.poll();
+            }, 10000);
+        }
+
+        // This needs to set responsive to true
+        this.updateStatus({
+            polling: true,
+        });
+    }
+
+
+    openConnection() {
+        if (this.closingConnection) {
+            this.log("closing connection already in process, will not open", EndpointCommunicator.LOG_CONNECTION);
+            return;
+        }
+        if (this.openingConnection) {
+            this.log("openingConnection in progress, skipping open connection", EndpointCommunicator.LOG_CONNECTION);
+            return;
+        }
+
+        this.openingConnection = true;
+
+        // Rate limit connection attempt
+        if (Date.now() - this.lastConnectAttemptTime < this.backoffTime) {
+
+            setTimeout(this.openConnection, this.backoffTime);
+            return;
+        }
+
+        if (this.backoffTime < 20000) {
+            this.backoffTime = this.backoffTime * 2;
+        }
+
+        this.lastConnectAttemptTime = Date.now();
+
+        let connectOpts = {
+            port: this.config.endpoint.port,
+            host: this.config.endpoint.ip
+        };
+
+        console.log(`opening TCP connection to ${connectOpts.host}:${connectOpts.port}`);
+        this.socket = net.connect(connectOpts, () => {
+            this.log("connected to " + connectOpts.host + ":" + connectOpts.port, EndpointCommunicator.LOG_CONNECTION);
+            this.openingConnection = false;
+            this.updateStatus({ connected: true });
+        });
+
+        this.socket.on('error', (e) => {
+            this.log("caught socket error: " + e.message, EndpointCommunicator.LOG_CONNECTION);
+            this.onEnd();
+        });
+        this.socket.on('data', (data) => {
+            this.onData(data);
+        });
+        this.socket.on('end', () => {
+            this.onEnd();
+        });
     }
 
     poll() {
-        if (! this.connected) {
+        if (! this.epStatus.polling) {
             return;
         }
 
@@ -272,6 +333,10 @@ export class TCPCommunicator extends EndpointCommunicator {
                 }
             }
         }
+    }
+
+    get port() : number {
+        return this.config.endpoint.port;
     }
 
 
@@ -347,6 +412,129 @@ export class TCPCommunicator extends EndpointCommunicator {
     }
 
 
+    /**
+     * Reset the device connection
+     */
+    reset() {
+        this.closeConnection();
+    }
+
+
+    /**
+     * The device connection lifecycle is driven by these status updates
+     * @param {IEndpointStatus} status
+     */
+
+    updateStatus(statusChanges: IEndpointStatus) {
+        let oldStatus = this.config.endpoint.cloneStatus();
+        let statusDiff= this.config.endpoint.statusDiff(statusChanges);
+        let statusUnchanged = this.config.endpoint.compareStatus(statusChanges);
+        let es = this.epStatus;
+
+        if (! (es === this.config.endpoint.epStatus)) {
+            this.log("epStatus mismathc!!!", EndpointCommunicator.LOG_STATUS);
+        }
+
+        let diffStr = "";
+        // Set the new values
+        for (let f in statusDiff) {
+            es[f] = statusDiff[f];
+            diffStr += f;
+            diffStr += " ";
+        }
+
+        let statusStr = this.endpoint.statusStr;
+        this.log("status update: " + statusStr, EndpointCommunicator.LOG_STATUS);
+
+        if (! statusUnchanged) {
+            //this.log("status diff: " + diffStr, EndpointCommunicator.LOG_STATUS);
+            this.config.statusUpdateCallback(es);
+        }
+
+
+        // Figure out what to do next
+        if (! es.enabled) {
+            if (! es.reachable) {
+                if (! es.connected) {
+                    if (! es.loggedIn) {
+                        if (! es.polling) {
+                            if (!es.responsive) {
+                                if (!es.ok) {
+                                    // Stopped.  Nothing to do.
+                                    return;
+                                }
+                                else {  // ok
+                                    // No, not really. update accordingly
+                                    this.updateStatus({ok: false});
+                                    return;
+                                }
+                            }
+                            else { // responsive
+                                this.closeConnection();
+                                return;
+                            }
+                        }
+                        else { // polling
+                            this.closeConnection();
+                            return;
+                        }
+                    }
+                    else { // loggedIn
+                        this.closeConnection();
+                        return;
+                    }
+                }
+                else { // connected
+                    this.closeConnection();
+                    return;
+                }
+            }
+            else { // reachable
+                if (es.connected) {
+                    this.closeConnection();
+                }
+            }
+        }
+        else { // enabled
+            if (! es.reachable) {
+                // Enabled, not reachable, nothing to do
+                return;
+            }
+            else { // reachable
+                if (! es.connected) {
+                    this.openConnection();
+                    return;
+                }
+                else { // connected
+                    if (! es.loggedIn) {
+                        this.doDeviceLogon();
+                        return;
+                    }
+                    else { // loggedIn
+                        if (! es.polling) {
+                            this.online();
+                            return;
+                        }
+                        else { // polling
+                            if (! es.responsive) {
+                                if (statusDiff.responsive === false) {
+                                    // Disconnect and attempt to reconnect
+                                    this.closeConnection();
+                                    return;
+                                }
+                            }
+                            else { // responsive
+                                if (! es.ok) {
+                                    this.updateStatus({ok : true });
+                                    return;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
 
 
     writeToSocket(val: string) {
