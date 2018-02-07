@@ -105,6 +105,11 @@ export class EndpointCommunicator implements IEndpointCommunicator {
      */
 
     protected launchPing() {
+        if (this.pingProcess) {
+            this.pingProcess.kill('SIGHUP');
+        }
+
+
         this.pingProcess = cp.spawn("ping",["-i", "5", this.endpoint.address]);
         this.log("ping process launched", EndpointCommunicator.LOG_CONNECTION);
 

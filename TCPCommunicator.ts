@@ -30,6 +30,7 @@ export class TCPCommunicator extends EndpointCommunicator {
 
     closingConnection = false;
     openingConnection = false;
+    protected lastConnectTimeout;
     protected lastConnectAttemptTime = 0;
 
 
@@ -48,8 +49,20 @@ export class TCPCommunicator extends EndpointCommunicator {
             return;
         }
         if (! this.closingConnection) {
-            this.closingConnection = true;
-            this.socket.end();
+            if (this.socket) {
+                this.closingConnection = true;
+                this.log("closing connection to device");
+                this.socket.end();
+
+                setTimeout(()=> {
+                    // Avoid getting stuck in purgatory if socket.end() doesn't produce the right event
+                    this.closingConnection = false;
+                }, 5000);
+            }
+            else {
+                this.log("closeConnection: skipping close connection");
+                this.onEnd();
+            }
         }
         else {
             this.log("closing connection already in process", EndpointCommunicator.LOG_CONNECTION);
@@ -270,27 +283,34 @@ export class TCPCommunicator extends EndpointCommunicator {
             return;
         }
 
-        this.openingConnection = true;
-
         // Rate limit connection attempt
         if (Date.now() - this.lastConnectAttemptTime < this.backoffTime) {
-
-            setTimeout(this.openConnection, this.backoffTime);
-            return;
+            if (! this.lastConnectTimeout) {
+                this.lastConnectTimeout = setTimeout(() => {
+                    this.openConnection()
+                }, this.backoffTime);
+                return;
+            }
         }
+
+        this.openingConnection = true;
 
         if (this.backoffTime < 20000) {
             this.backoffTime = this.backoffTime * 2;
         }
 
         this.lastConnectAttemptTime = Date.now();
+        if (this.lastConnectTimeout) {
+            clearTimeout(this.lastConnectTimeout);
+            this.lastConnectTimeout = false;
+        }
 
         let connectOpts = {
             port: this.config.endpoint.port,
             host: this.config.endpoint.ip
         };
 
-        console.log(`opening TCP connection to ${connectOpts.host}:${connectOpts.port}`);
+        this.log(`opening TCP connection to ${connectOpts.host}:${connectOpts.port}`, EndpointCommunicator.LOG_CONNECTION);
         this.socket = net.connect(connectOpts, () => {
             this.log("connected to " + connectOpts.host + ":" + connectOpts.port, EndpointCommunicator.LOG_CONNECTION);
             this.openingConnection = false;
@@ -299,12 +319,14 @@ export class TCPCommunicator extends EndpointCommunicator {
 
         this.socket.on('error', (e) => {
             this.log("caught socket error: " + e.message, EndpointCommunicator.LOG_CONNECTION);
+            this.openingConnection = false;
             this.onEnd();
         });
         this.socket.on('data', (data) => {
             this.onData(data);
         });
         this.socket.on('end', () => {
+            this.openingConnection = false;
             this.onEnd();
         });
     }
@@ -417,6 +439,7 @@ export class TCPCommunicator extends EndpointCommunicator {
      */
     reset() {
         this.closeConnection();
+        this.initStatus();
     }
 
 
@@ -492,6 +515,13 @@ export class TCPCommunicator extends EndpointCommunicator {
             else { // reachable
                 if (es.connected) {
                     this.closeConnection();
+                }
+                else {
+                    // not enabled, connection closed.  check ok status
+                    if (es.ok) {
+                        this.updateStatus({ok: false});
+                        return;
+                    }
                 }
             }
         }
