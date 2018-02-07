@@ -57,7 +57,7 @@ export class HTTPCommunicator extends EndpointCommunicator {
                     let val = cmd.parseQueryResponse(body);
                     if (typeof val !== 'undefined') {
                         this.log(`${cmd.name} response parsed: ${body},${val}`, EndpointCommunicator.LOG_POLLING);
-                        this.config.controlUpdateCallback(control, val);
+                        this.setControlValue(control, val);
                         this.connectionConfirmed();
                     }
                     else {

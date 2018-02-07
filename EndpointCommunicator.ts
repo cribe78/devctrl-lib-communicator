@@ -211,7 +211,6 @@ export class EndpointCommunicator implements IEndpointCommunicator {
         if (valDiff || this.indeterminateControls[control._id]) {
             this.indeterminateControls[control._id] = false;
 
-            this.log(`control update: ${control.name} = ${val}`, "updates");
             this.config.controlUpdateCallback(control, val);
             control.value = val;
         }
