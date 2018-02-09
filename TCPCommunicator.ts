@@ -254,6 +254,8 @@ export class TCPCommunicator extends EndpointCommunicator {
                 let offset = Date.now() - this.lastConfirmedCommunication;
 
                 if (offset > 30000) {
+                    this.log(`${offset}ms since last communication received, setting status to unresponsive`,
+                        EndpointCommunicator.LOG_STATUS);
                     this.updateStatus({ responsive: false });
                 }
             }, 30000);
@@ -451,7 +453,6 @@ export class TCPCommunicator extends EndpointCommunicator {
      */
 
     updateStatus(statusChanges: IEndpointStatus) {
-        let oldStatus = this.config.endpoint.cloneStatus();
         let statusDiff= this.config.endpoint.statusDiff(statusChanges);
         let statusUnchanged = this.config.endpoint.compareStatus(statusChanges);
         let es = this.epStatus;
@@ -467,6 +468,8 @@ export class TCPCommunicator extends EndpointCommunicator {
             diffStr += f;
             diffStr += " ";
         }
+
+        es.ok = ( es.enabled && es.reachable && es.connected && es.loggedIn && es.polling && es.responsive);
 
         let statusStr = this.endpoint.statusStr;
         this.log("status update: " + statusStr, EndpointCommunicator.LOG_STATUS);
@@ -486,11 +489,6 @@ export class TCPCommunicator extends EndpointCommunicator {
                             if (!es.responsive) {
                                 if (!es.ok) {
                                     // Stopped.  Nothing to do.
-                                    return;
-                                }
-                                else {  // ok
-                                    // No, not really. update accordingly
-                                    this.updateStatus({ok: false});
                                     return;
                                 }
                             }
@@ -517,13 +515,6 @@ export class TCPCommunicator extends EndpointCommunicator {
             else { // reachable
                 if (es.connected) {
                     this.closeConnection();
-                }
-                else {
-                    // not enabled, connection closed.  check ok status
-                    if (es.ok) {
-                        this.updateStatus({ok: false});
-                        return;
-                    }
                 }
             }
         }
@@ -552,20 +543,21 @@ export class TCPCommunicator extends EndpointCommunicator {
                                 if (statusDiff.responsive === false) {
                                     // Disconnect and attempt to reconnect
                                     this.closeConnection();
-                                    return;
                                 }
+                                return;
                             }
-                            else { // responsive
-                                if (! es.ok) {
-                                    this.updateStatus({ok : true });
-                                    return;
-                                }
+                            else {
+                                // All good. Return
+                                return;
                             }
                         }
                     }
                 }
             }
         }
+
+        // We'll only fall through to here in weird unhandled cases.
+        throw new Error("unhandled status update state");
     }
 
 

@@ -217,7 +217,7 @@ export class HTTPCommunicator extends EndpointCommunicator {
 
         // connected and loggedIn don't apply, they should always mirror polling
         es.connected = es.loggedIn = es.polling;
-
+        es.ok = ( es.enabled && es.reachable && es.connected && es.loggedIn && es.polling && es.responsive);
 
         let statusStr = this.endpoint.statusStr;
         this.log("status update: " + statusStr, EndpointCommunicator.LOG_STATUS);
@@ -240,11 +240,7 @@ export class HTTPCommunicator extends EndpointCommunicator {
                                     return;
                                 }
                                 else {  // ok
-                                    if (es.messengerConnected) {
-                                        // Not really ok, update accordingly
-                                        this.updateStatus({ok: false});
-                                        return;
-                                    }
+                                    // We should never end up here. Fall through and throw error
                                 }
                             }
                             else { // responsive
@@ -291,13 +287,14 @@ export class HTTPCommunicator extends EndpointCommunicator {
                         }
                     }
                     else { // responsive
-                        if (! es.ok) {
-                            this.updateStatus({ok : true });
-                        }
+                        return;
                     }
                 }
             }
         }
+
+        // We'll only fall through to here in weird unhandled cases.
+        throw new Error("unhandled status update state");
     }
 
 }
