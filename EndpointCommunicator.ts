@@ -16,7 +16,7 @@ export interface ICommunicatorProtoPackage {
 export interface IEndpointCommunicatorConfig {
     endpoint: Endpoint
     controlUpdateCallback: (control: Control, value: any) => void;
-    statusUpdateCallback: (status: IEndpointStatus) => void;
+    statusUpdateCallback: () => void;
 }
 
 export interface IEndpointCommunicator {
@@ -97,6 +97,7 @@ export class EndpointCommunicator implements IEndpointCommunicator {
         es.loggedIn = false;
         es.responsive = false;
         es.ok = false;
+        this.config.statusUpdateCallback();
     }
 
 
@@ -197,7 +198,7 @@ export class EndpointCommunicator implements IEndpointCommunicator {
      */
     run() {
         this.initStatus();
-        this.config.statusUpdateCallback(this.epStatus);
+        this.config.statusUpdateCallback();
         this.updateStatus({});  //  This triggers the execution loop
     }
 

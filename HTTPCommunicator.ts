@@ -145,7 +145,7 @@ export class HTTPCommunicator extends EndpointCommunicator {
         es.polling = false;
         es.responsive = false;
         es.ok = false;
-
+        this.config.statusUpdateCallback();
         this.launchPing();
     }
 
@@ -224,7 +224,7 @@ export class HTTPCommunicator extends EndpointCommunicator {
 
         if (! statusUnchanged) {
             //this.log("status diff: " + diffStr, EndpointCommunicator.LOG_STATUS);
-            this.config.statusUpdateCallback(es);
+            this.config.statusUpdateCallback();
         }
 
 

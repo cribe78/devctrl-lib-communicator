@@ -125,7 +125,7 @@ export class TCPCommunicator extends EndpointCommunicator {
         if (! this.epStatus.ok) {
             // Update can't be processed, remind
             this.log("update cannot be processed, communicator not connected", EndpointCommunicator.LOG_UPDATES);
-            this.config.statusUpdateCallback(this.epStatus);
+            this.config.statusUpdateCallback();
             return;
         }
 
@@ -161,7 +161,7 @@ export class TCPCommunicator extends EndpointCommunicator {
         es.polling = false;
         es.responsive = false;
         es.ok = false;
-
+        this.config.statusUpdateCallback();
         this.launchPing();
     }
 
@@ -227,10 +227,12 @@ export class TCPCommunicator extends EndpointCommunicator {
 
     onEnd() {
         this.log("device disconnected : " + this.endpoint.address);
+        console.trace();
         if (this.backoffTime < 20000) {
             this.backoffTime = this.backoffTime * 2;
         }
 
+        this.socket = undefined;
         this.closingConnection = false;
         this.openingConnection = false;
 
@@ -471,7 +473,7 @@ export class TCPCommunicator extends EndpointCommunicator {
 
         if (! statusUnchanged) {
             //this.log("status diff: " + diffStr, EndpointCommunicator.LOG_STATUS);
-            this.config.statusUpdateCallback(es);
+            this.config.statusUpdateCallback();
         }
 
 
