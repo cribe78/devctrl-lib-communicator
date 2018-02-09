@@ -294,7 +294,7 @@ export class HTTPCommunicator extends EndpointCommunicator {
         }
 
         // We'll only fall through to here in weird unhandled cases.
-        throw new Error("unhandled status update state");
+        //throw new Error("unhandled status update state");
     }
 
 }
