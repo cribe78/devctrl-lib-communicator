@@ -14,7 +14,7 @@
   "license": "GPL-3.0",
   "homepage": "https://bitbucket.org/ufdwi/devctrl-lib-communicator#readme",
   "dependencies": {
-    "@devctrl/common": "^3.0.0",
+    "@devctrl/common": "^6.0.0",
     "@types/node": "^8.0.52",
     "sprintf-js": "^1.1.1"
   }
