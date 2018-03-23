@@ -232,6 +232,11 @@ export class TCPCommunicator extends EndpointCommunicator {
             this.backoffTime = this.backoffTime * 2;
         }
 
+        if (this.socket) {
+            this.log("destroying socket", EndpointCommunicator.LOG_CONNECTION);
+            this.socket.destroy();
+        }
+
         this.socket = undefined;
         this.closingConnection = false;
         this.openingConnection = false;
