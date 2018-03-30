@@ -42,6 +42,7 @@
         protected backoffTime: number = 1000;
         protected pollTimer: any = 0;
         protected monitorTimer: any = 0;
+        protected running = false;
 
         constructor(config: IEndpointCommunicatorConfig) {
             this.config = config;
@@ -200,8 +201,10 @@
          * Call this once, after the object has been created, the config has been set
          */
         run() {
-            this.initStatus();
-            this.config.statusUpdateCallback();
+            if (! this.running) {
+                this.initStatus();
+                this.running = true;
+            }
             this.updateStatus({});  //  This triggers the execution loop
         }
 
