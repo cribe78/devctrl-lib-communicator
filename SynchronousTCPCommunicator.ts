@@ -113,7 +113,7 @@ export class SynchronousTCPCommunicator extends TCPCommunicator {
         else {
             this.commandTimeoutTimer = setTimeout(() => {
                 //TODO: if this timeout is reached, things get fucked up if responses come in eventually
-                this.log(`response timeout reached, nothing heard`, EndpointCommunicator.LOG_POLLING);
+                this.log(`response timeout reached, nothing heard`, EndpointCommunicator.LOG_CONNECTION);
                 this.runNextCommand()
             }, this.commandTimeoutDuration);
         }

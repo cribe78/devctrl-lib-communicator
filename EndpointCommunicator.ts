@@ -108,6 +108,7 @@
 
         protected launchPing() {
             if (this.pingProcess) {
+                this.pingProcess.removeAllListeners('exit');  // Prevent multiplication of ping processes
                 this.pingProcess.kill('SIGHUP');
             }
 
@@ -134,7 +135,7 @@
                 this.log(`ping process STDERR: ${str}`);
             });
 
-            this.pingProcess.on('close', (code) => {
+            this.pingProcess.on('exit', (code) => {
                 this.log("ping process exited, relaunching", EndpointCommunicator.LOG_CONNECTION);
                 this.launchPing();
             });
