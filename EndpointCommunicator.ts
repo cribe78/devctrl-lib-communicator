@@ -43,6 +43,9 @@
         protected pollTimer: any = 0;
         protected monitorTimer: any = 0;
         protected running = false;
+        protected lastLogMsg = "";
+        protected lastLogTime = 0;
+        protected lastLogCount = 0;
 
         constructor(config: IEndpointCommunicatorConfig) {
             this.config = config;
@@ -154,7 +157,31 @@
             let opts = this.config.endpoint.commLogOptionsObj;
 
             if (opts[tag]) {
-                console.log(msg);
+                if (msg != this.lastLogMsg) {
+                    if (this.lastLogCount > 0) {
+                        let repeatMsg = `previous message repeated ${this.lastLogCount} times`;
+                        console.log(repeatMsg);
+                    }
+
+                    console.log(msg);
+                    this.lastLogCount = 0;
+                    this.lastLogTime = Date.now();
+                    this.lastLogMsg = msg;
+                }
+                else {
+                    if (Date.now() - this.lastLogTime > 60000) {
+                        let repeatMsg = `previous message repeated ${this.lastLogCount} times`;
+                        console.log(repeatMsg);
+                        console.log(msg);
+                        this.lastLogCount = 0;
+                        this.lastLogTime = Date.now();
+                        this.lastLogMsg = msg;
+                    }
+                    else {
+                        this.lastLogCount++;
+                    }
+                }
+
             }
             else if (opts["all"]) {
                 console.log(msg);
