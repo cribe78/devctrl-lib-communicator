@@ -4,3 +4,4 @@ export * from "./TCPCommunicator";
 export * from "./SynchronousTCPCommunicator";
 export * from "./HTTPCommand";
 export * from "./HTTPCommunicator";
+export * from "./DummyCommunicator";
