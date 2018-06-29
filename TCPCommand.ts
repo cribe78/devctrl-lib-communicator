@@ -28,7 +28,7 @@ export interface ITCPCommandConfig {
 }
 
 
-
+//TODO: define interface ITCPCommand
 
 export class TCPCommand {
     cmdStr: string;
@@ -90,7 +90,7 @@ export class TCPCommand {
         this.writeonly = !!config.writeonly;
     }
 
-    expandTemplate(template: string, value: any) : string {
+    protected expandTemplate(template: string, value: any) : string {
         // Use sprintf to expand the template
         let res = '';
 
@@ -110,7 +110,7 @@ export class TCPCommand {
         return res;
     }
 
-    getControlTemplates() : Control[] {
+    public getControlTemplates() : Control[] {
         let ctid = this.endpoint_id + "-" + this.cmdStr;
         let templateData : ControlData = {
             _id: ctid,
@@ -131,7 +131,7 @@ export class TCPCommand {
     }
 
 
-    matchesReport(devStr: string) : boolean {
+    public matchesReport(devStr: string) : boolean {
         if (! this.cmdReportRE) {
             return devStr == this.cmdStr;
         }
@@ -142,7 +142,7 @@ export class TCPCommand {
     }
 
     // Override this function in a custom Command class if necessary
-    parseBoolean(value) : boolean {
+    protected parseBoolean(value) : boolean {
         // Add string representations of 0 and false to standard list of falsey values
         if (typeof value == "string") {
             if (value.toLowerCase() == "false") {
@@ -156,7 +156,7 @@ export class TCPCommand {
         return !!value;
     }
 
-    parseReportValue(control: Control, line: string) : any {
+    public parseReportValue(control: Control, line: string) : any {
         if (! this.cmdReportRE) {
             return line;
         }
@@ -170,7 +170,7 @@ export class TCPCommand {
         return '';
     }
 
-    parseQueryResponse(control: Control, line: string) : any {
+    public parseQueryResponse(control: Control, line: string) : any {
         let matches = line.match(this.queryResponseMatchString());
 
         if (matches) {
@@ -180,7 +180,7 @@ export class TCPCommand {
         return '';
     }
 
-    parseValue(value) : any {
+    protected parseValue(value) : any {
         if (this.control_type == Control.CONTROL_TYPE_RANGE) {
             return parseFloat(value);
         }
@@ -195,7 +195,7 @@ export class TCPCommand {
     }
 
 
-    queryString() : string {
+    public queryString() : string {
         if (this.cmdQueryStr) {
             return this.cmdQueryStr;
         }
@@ -203,11 +203,11 @@ export class TCPCommand {
         return `${this.cmdStr}?`;
     }
 
-    queryResponseMatchString() : string | RegExp {
+    public queryResponseMatchString() : string | RegExp {
         return this.cmdQueryResponseRE;
     }
 
-    updateString(control: Control, update: ControlUpdateData) {
+    public updateString(control: Control, update: ControlUpdateData) {
         if (this.cmdUpdateTemplate) {
             return this.expandTemplate(this.cmdUpdateTemplate, update.value);
         }
@@ -215,7 +215,7 @@ export class TCPCommand {
         return `${ this.cmdStr } ${ update.value }`;
     }
 
-    updateResponseMatchString(update: ControlUpdateData) : string {
+    public updateResponseMatchString(update: ControlUpdateData) : string {
         if (this.cmdUpdateResponseTemplate) {
             return this.expandTemplate(this.cmdUpdateResponseTemplate, update.value);
         }

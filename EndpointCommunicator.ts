@@ -32,6 +32,8 @@
 
 
     export class EndpointCommunicator implements IEndpointCommunicator {
+        //TODO: the relationship between commands, controls, and CTIDs needs to be cleared up
+        //TODO: implement 1 command to many controls
         controlsByCtid: IndexedDataSet<Control> = {};
         controls: IndexedDataSet<Control> = {};
         config: IEndpointCommunicatorConfig;

@@ -102,7 +102,7 @@ export class TCPCommunicator extends EndpointCommunicator {
         ]);
     }
 
-    getControlTemplates() : IndexedDataSet<Control> {
+    public getControlTemplates() : IndexedDataSet<Control> {
         this.buildCommandList();
 
         for (let cmd in this.commands) {
@@ -119,7 +119,7 @@ export class TCPCommunicator extends EndpointCommunicator {
         return this.controlsByCtid;
     }
 
-    handleControlUpdateRequest(request: ControlUpdateData) {
+    public handleControlUpdateRequest(request: ControlUpdateData) {
         let control = this.controls[request.control_id];
 
         if (! this.epStatus.ok) {
