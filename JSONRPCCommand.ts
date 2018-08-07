@@ -16,7 +16,7 @@ export class JSONRPCCommand extends TCPCommand {
         throw new Error("extractUpdateResponseValue not implemented");
     }
 
-    extractQueryResponseValue(resp : any) : any {
+    extractQueryResponseValue(resp : any, ctid: string) : any {
         throw new Error( "extractQueryResponseValue not implemented");
     }
 

@@ -350,6 +350,9 @@ export class TCPCommunicator extends EndpointCommunicator {
             this.log(`WARNING polling device, expected response queue has reached length of ${exd}`);
         }
 
+
+        let commandsPolled = [];
+
         for (let id in this.controls) {
             let control = this.controls[id];
 
@@ -357,7 +360,14 @@ export class TCPCommunicator extends EndpointCommunicator {
                 let cmd = this.commandsByTemplate[control.ctid];
 
                 if (cmd) {
-                    this.executeCommandQuery(cmd);
+                    // Multiple controls may share a command.  Don't execute the same command multiple times
+                    if (commandsPolled.indexOf(cmd.cmdStr) == -1) {
+                        this.executeCommandQuery(cmd);
+                        commandsPolled.push(cmd.cmdStr);
+                    }
+                    else {
+                        this.log("command " + cmd.cmdStr + " already polled this cycle", TCPCommunicator.LOG_POLLING);
+                    }
                 }
                 else {
                     this.log("command not found for poll control " + control.ctid);

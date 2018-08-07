@@ -21,9 +21,10 @@ export class JSONRPCCommunicator extends TCPCommunicator {
         this.writeToSocket(queryStr);
 
         this.responseCallbacks[queryObject.id] = (resp) => {
-            let val = command.extractQueryResponseValue(resp);
+
 
             for (let ctid of command.ctidList) {
+                let val = command.extractQueryResponseValue(resp, ctid);
                 let control = this.controlsByCtid[ctid];
                 //debug("control id is " + control._id);
                 this.setControlValue(control, val);
