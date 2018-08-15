@@ -6,6 +6,7 @@ import {
     ControlData
 } from "@devctrl/common";
 import {sprintf} from "sprintf-js";
+import {IDCCommand} from "./IDCCommand";
 
 let debug = console.log;
 
@@ -28,9 +29,7 @@ export interface ITCPCommandConfig {
 }
 
 
-//TODO: define interface ITCPCommand
-
-export class TCPCommand {
+export class TCPCommand implements IDCCommand {
     cmdStr: string;
     cmdQueryStr: string; // The query string to send to have this value reported
     cmdQueryResponseRE: RegExp = /^$a/; // RE to match the response to a device poll, default matches nothing
@@ -141,6 +140,17 @@ export class TCPCommand {
         return !!matches;
     }
 
+    public matchQueryResponse(line: string) : boolean {
+        let searchStr = this.queryResponseMatchString();
+        return line.search(searchStr) > -1;
+    }
+
+
+    public matchUpdateResponse(control: Control, update: ControlUpdateData, line: string) : boolean {
+        let searchStr = this.updateResponseMatchString(update);
+        return line.search(searchStr) > -1;
+    }
+
     // Override this function in a custom Command class if necessary
     protected parseBoolean(value) : boolean {
         // Add string representations of 0 and false to standard list of falsey values
@@ -180,6 +190,12 @@ export class TCPCommand {
         return '';
     }
 
+    public parseUpdateResponse(control: Control, update: ControlUpdateData, line: string) {
+        // Override this if you want to read an actual value form the response
+        return update.value;
+    }
+
+
     protected parseValue(value) : any {
         if (this.control_type == Control.CONTROL_TYPE_RANGE) {
             return parseFloat(value);
@@ -203,7 +219,7 @@ export class TCPCommand {
         return `${this.cmdStr}?`;
     }
 
-    public queryResponseMatchString() : string | RegExp {
+    protected queryResponseMatchString() : string | RegExp {
         return this.cmdQueryResponseRE;
     }
 
@@ -215,7 +231,7 @@ export class TCPCommand {
         return `${ this.cmdStr } ${ update.value }`;
     }
 
-    public updateResponseMatchString(update: ControlUpdateData) : string {
+    protected updateResponseMatchString(update: ControlUpdateData) : string {
         if (this.cmdUpdateResponseTemplate) {
             return this.expandTemplate(this.cmdUpdateResponseTemplate, update.value);
         }

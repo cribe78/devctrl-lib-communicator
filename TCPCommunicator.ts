@@ -1,5 +1,5 @@
 import {EndpointCommunicator, IEndpointCommunicatorConfig} from "./EndpointCommunicator";
-import { TCPCommand } from "./TCPCommand";
+import { IDCCommand } from "./IDCCommand";
 import * as net from "net";
 import {
     Control,
@@ -8,6 +8,7 @@ import {
     IEndpointStatus,
     IndexedDataSet
 } from "@devctrl/common";
+import {IDCExpectedResponse} from "./IDCExpectedResponse";
 
 
 
@@ -17,15 +18,15 @@ export type TCPCommEncoding = "string" | "hex";
 
 export class TCPCommunicator extends EndpointCommunicator {
     socket: net.Socket;
-    commands: IndexedDataSet<TCPCommand> = {};
-    commandsByTemplate: IndexedDataSet<TCPCommand> = {};
+    commands: IndexedDataSet<IDCCommand> = {};
+    commandsByTemplate: IndexedDataSet<IDCCommand> = {};
     inputLineTerminator : string | RegExp = '\r\n';
     outputLineTerminator = '\r\n';
     socketEncoding = 'utf8';
     inputBuffer: string = '';
 
 
-    expectedResponses: [string | RegExp, (line: string) => any][] = [];
+    expectedResponses: IDCExpectedResponse[] = [];
     commsMode : TCPCommEncoding = "string";
 
     closingConnection = false;
@@ -78,28 +79,30 @@ export class TCPCommunicator extends EndpointCommunicator {
         });
     };
 
-    executeCommandQuery(cmd: TCPCommand) {
+    executeCommandQuery(cmd: IDCCommand) {
         if (! cmd.queryString()) {
             return;
         }
 
         let queryStr = cmd.queryString();
         this.log("sending query: " + queryStr, EndpointCommunicator.LOG_POLLING);
-        this.writeToSocket(queryStr + this.outputLineTerminator);
+        this.queueCommand(queryStr + this.outputLineTerminator,
+            {
+                checkFn: (data) => {
+                    return cmd.matchQueryResponse(data);
+                },
+                processFn: (line) =>  {
+                    for (let ctid of cmd.ctidList) {
+                        let control = this.controlsByCtid[ctid];
+                        //debug("control id is " + control._id);
+                        let val = cmd.parseQueryResponse(control, line);
+                        this.setControlValue(control, val);
+                    }
 
-        this.expectedResponses.push([
-            cmd.queryResponseMatchString(),
-            (line) => {
-                for (let ctid of cmd.ctidList) {
-                    let control = this.controlsByCtid[ctid];
-                    //debug("control id is " + control._id);
-                    let val = cmd.parseQueryResponse(control, line);
-                    this.setControlValue(control, val);
+                    this.connectionConfirmed();
                 }
-
-                this.connectionConfirmed();
             }
-        ]);
+        );
     }
 
     public getControlTemplates() : IndexedDataSet<Control> {
@@ -136,12 +139,22 @@ export class TCPCommunicator extends EndpointCommunicator {
             this.log("queueing update: " + updateStr, EndpointCommunicator.LOG_UPDATES);
 
             this.queueCommand(updateStr + this.outputLineTerminator,
-                [
-                    command.updateResponseMatchString(request),
-                    (line) => {
-                        this.setControlValue(control, request.value);
+                {
+                    checkFn: (line) => {
+                        return command.matchUpdateResponse(control, request, line);
+                    },
+                    processFn: (line) => {
+                        for (let ctid of command.ctidList) {
+                            let control = this.controlsByCtid[ctid];
+                            //debug("control id is " + control._id);
+                            let val = command.parseUpdateResponse(control, request, line);
+                            this.setControlValue(control, val);
+                        }
+
+                        this.connectionConfirmed()
+
                     }
-                ]
+                }
             );
 
             // Mark this control as indeterminate, in case we see a query or other update
@@ -168,7 +181,7 @@ export class TCPCommunicator extends EndpointCommunicator {
 
 
 
-    matchLineToCommand(line: string) : TCPCommand | boolean {
+    matchLineToCommand(line: string) : IDCCommand | boolean {
         for (let cmdStr in this.commands) {
             let cmd = this.commands[cmdStr];
 
@@ -190,10 +203,10 @@ export class TCPCommunicator extends EndpointCommunicator {
         for (let idx = 0; idx < this.expectedResponses.length; idx++) {
             let eresp = this.expectedResponses[idx];
 
-            if (line.search(<string>eresp[0]) > -1 ) {
-                this.log(`${line} matched expected response "${eresp[0]}" at [${idx}]`, EndpointCommunicator.LOG_MATCHING);
+            if (eresp.checkFn(line)) {
+                this.log(`${line} matched expected response at [${idx}]`, EndpointCommunicator.LOG_MATCHING);
                 //Execute expected response callback
-                eresp[1](line);
+                eresp.processFn(line);
 
                 this.expectedResponses = this.expectedResponses.slice(idx + 1);
                 return true;
@@ -361,12 +374,12 @@ export class TCPCommunicator extends EndpointCommunicator {
 
                 if (cmd) {
                     // Multiple controls may share a command.  Don't execute the same command multiple times
-                    if (commandsPolled.indexOf(cmd.cmdStr) == -1) {
+                    if (commandsPolled.indexOf(cmd.name) == -1) {
                         this.executeCommandQuery(cmd);
-                        commandsPolled.push(cmd.cmdStr);
+                        commandsPolled.push(cmd.name);
                     }
                     else {
-                        this.log("command " + cmd.cmdStr + " already polled this cycle", TCPCommunicator.LOG_POLLING);
+                        this.log("command " + cmd.name + " already polled this cycle", TCPCommunicator.LOG_POLLING);
                     }
                 }
                 else {
@@ -405,7 +418,7 @@ export class TCPCommunicator extends EndpointCommunicator {
 
 
         if (match) {
-            let cmd = <TCPCommand>match;
+            let cmd = <IDCCommand>match;
             for (let ctid of cmd.ctidList) {
                 let control = this.controlsByCtid[ctid];
 
@@ -426,12 +439,12 @@ export class TCPCommunicator extends EndpointCommunicator {
      * can do fancier things
      */
 
-    queueCommand(cmdStr : string, expectedResponse: [string | RegExp, (line: string) => any]) {
+    queueCommand(cmdStr : string, expectedResponse: IDCExpectedResponse) {
         this.writeToSocket(cmdStr);
 
-        if (expectedResponse[0] == '') {
+        if (expectedResponse.checkFn('')) {
             // Get on with it
-            expectedResponse[1]('');
+            expectedResponse.processFn('');
         }
         else {
             this.expectedResponses.push(expectedResponse);

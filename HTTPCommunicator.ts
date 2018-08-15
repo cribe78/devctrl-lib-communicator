@@ -7,11 +7,14 @@ import {
 import {EndpointCommunicator, IEndpointCommunicatorConfig} from "./EndpointCommunicator";
 import {HTTPCommand} from "./HTTPCommand";
 import * as http from "http";
+import {IDCCommand} from "./IDCCommand";
 
 export class HTTPCommunicator extends EndpointCommunicator {
-    commands: IndexedDataSet<HTTPCommand> = {};
-    commandsByControl: IndexedDataSet<HTTPCommand> = {};
+    commands: IndexedDataSet<IDCCommand> = {};
+    commandsByTemplate: IndexedDataSet<IDCCommand> = {};
     pollTimer;
+    endpointPassword = "";
+    endpointUser = "";
 
     constructor(config: IEndpointCommunicatorConfig) {
         super(config);
@@ -29,39 +32,44 @@ export class HTTPCommunicator extends EndpointCommunicator {
 
     };
 
-    executeCommandQuery(cmd: HTTPCommand) {
+    executeCommandQuery(cmd: IDCCommand) {
         if (cmd.writeonly) {
             this.log(`not querying writeonly command ${cmd.name}`, EndpointCommunicator.LOG_POLLING);
         }
 
-
-        let control = this.controlsByCtid[cmd.controlData.ctid];
-        let requestOptions = {
-            hostname: this.config.endpoint.address,
-            path: cmd.queryPath()
-        };
-
-        let requestPath = "http://" + requestOptions.hostname + requestOptions.path;
+        let requestPath = "http://" + this.config.endpoint.address + cmd.queryString();
         this.log("sending request:" + requestPath, EndpointCommunicator.LOG_RAW_DATA);
 
-        http.get(requestPath, (res) => {
+        let req = http.request({
+            hostname: this.config.endpoint.address,
+            port: this.config.endpoint.port,
+            path: cmd.queryString(),
+            method: "GET",
+            headers: {
+
+            },
+            auth: `${this.endpointUser}:${this.endpointPassword}`
+        }, (res) => {
             if (res.statusCode !== 200) {
                 this.log("invalid status code response: " + res.statusCode);
             }
             else {
-                //debug(`cmd ${cmd.name} successfully queried`);
+                this.log(`cmd ${cmd.name} successfully queried`);
                 res.setEncoding('utf8');
                 let body ='';
                 res.on('data', (chunk) => { body += chunk});
                 res.on('end', () => {
-                    let val = cmd.parseQueryResponse(body);
-                    if (typeof val !== 'undefined') {
-                        this.log(`${cmd.name} response parsed: ${body},${val}`, EndpointCommunicator.LOG_POLLING);
-                        this.setControlValue(control, val);
-                        this.connectionConfirmed();
-                    }
-                    else {
-                        this.log(`${cmd.name} update response did not match: ${body}`, EndpointCommunicator.LOG_MATCHING);
+                    for (let ctid of cmd.ctidList) {
+                        let control = this.controlsByCtid[ctid];
+                        let val = cmd.parseQueryResponse(control, body);
+                        if (typeof val !== 'undefined') {
+                            this.log(`${cmd.name} response parsed: ${body},${val}`, EndpointCommunicator.LOG_POLLING);
+                            this.setControlValue(control, val);
+                            this.connectionConfirmed();
+                        }
+                        else {
+                            this.log(`${cmd.name} update response did not match: ${body}`, EndpointCommunicator.LOG_MATCHING);
+                        }
                     }
                 });
             }
@@ -70,17 +78,18 @@ export class HTTPCommunicator extends EndpointCommunicator {
                 this.log(`Error on query: ${e.message}`);
                 this.closeConnection();
             });
+        req.end();
     }
 
     getControlTemplates() : IndexedDataSet<Control> {
         this.buildCommandList();
 
         for (let cmd in this.commands) {
-            let controls = this.commands[cmd].getControls();
+            let controls = this.commands[cmd].getControlTemplates();
 
             for (let control of controls) {
                 this.controlsByCtid[control.ctid] = control;
-                this.commandsByControl[control.ctid] = this.commands[cmd];
+                this.commandsByTemplate[control.ctid] = this.commands[cmd];
             }
         }
 
@@ -101,15 +110,19 @@ export class HTTPCommunicator extends EndpointCommunicator {
             return;
         }
 
-        let requestOptions = {
-            hostname: this.config.endpoint.address,
-            path: command.commandPath(update.value)
-        };
-
-        let requestPath = "http://" + requestOptions.hostname + requestOptions.path;
+        let requestPath = "http://" + this.config.endpoint.address + command.updateString(control, update.value);
         this.log("sending request:" + requestPath, EndpointCommunicator.LOG_RAW_DATA);
 
-        http.get(requestPath, (res) => {
+        let req = http.get({
+            hostname: this.config.endpoint.address,
+            port: this.config.endpoint.port,
+            path: command.updateString(control, update.value),
+            method: "GET",
+            headers: {
+
+            },
+            auth: `${this.endpointUser}:${this.endpointPassword}`
+        }, (res) => {
             if (res.statusCode !== 200) {
                 this.log("invalid status code response: " + res.statusCode);
             }
@@ -119,8 +132,8 @@ export class HTTPCommunicator extends EndpointCommunicator {
                 let body ='';
                 res.on('data', (chunk) => { body += chunk});
                 res.on('end', () => {
-                    if (command.matchResponse(body)) {
-                        let newVal = command.parseCommandResponse(body, update.value);
+                    if (command.matchUpdateResponse(control, update, body)) {
+                        let newVal = command.parseUpdateResponse(control, update, body);
                         this.log(`${control.name} response successful, value: ${newVal}`, EndpointCommunicator.LOG_UPDATES);
                         this.config.controlUpdateCallback(control, newVal);
                         this.connectionConfirmed();
@@ -134,6 +147,8 @@ export class HTTPCommunicator extends EndpointCommunicator {
             this.log(`Error on update request: ${e.message}`);
             this.closeConnection();
         });
+
+        req.end();
     }
 
 
@@ -185,7 +200,7 @@ export class HTTPCommunicator extends EndpointCommunicator {
             let control = this.controls[id];
 
             if (control.poll) {
-                let cmd = this.commandsByControl[control.ctid];
+                let cmd = this.commandsByTemplate[control.ctid];
 
                 if (cmd) {
                     this.executeCommandQuery(cmd);

@@ -1,40 +1,16 @@
 import {TCPCommand} from "./TCPCommand";
 import {TCPCommunicator} from "./TCPCommunicator";
 import {EndpointCommunicator} from "./EndpointCommunicator";
+import {IDCCommand} from "./IDCCommand";
+import {IDCExpectedResponse} from "./IDCExpectedResponse";
 
 
 export class SynchronousTCPCommunicator extends TCPCommunicator {
     commandQueue : string[] = [];
-    expectedResponsesQueue: [string | RegExp, (line: string) => any][] = [];
+    expectedResponsesQueue: IDCExpectedResponse[] = [];
     commandQueueRunning = false;
     commandTimeoutTimer : any = 0;
     commandTimeoutDuration : number = 400;
-
-    executeCommandQuery(cmd: TCPCommand) {
-        if (! cmd.queryString()) {
-            return;
-        }
-
-        let self = this;
-        let queryStr = cmd.queryString();
-        this.log("queueing query: " + queryStr, EndpointCommunicator.LOG_POLLING);
-
-        this.queueCommand(queryStr + this.outputLineTerminator,
-            [
-                cmd.queryResponseMatchString(),
-                (line) => {
-                    for (let ctid of cmd.ctidList) {
-                        let control = self.controlsByCtid[ctid];
-
-                        let val = cmd.parseQueryResponse(control, line);
-                        self.setControlValue(control, val);
-                    }
-
-                    self.connectionConfirmed();
-                }
-            ]
-        );
-    }
 
 
     onData(data: any) {
@@ -61,7 +37,7 @@ export class SynchronousTCPCommunicator extends TCPCommunicator {
     }
 
 
-    queueCommand(cmdStr : string, expectedResponse: [string | RegExp, (line: string) => any]) {
+    queueCommand(cmdStr : string, expectedResponse: IDCExpectedResponse) {
         this.commandQueue.push(cmdStr);
         this.expectedResponsesQueue.push(expectedResponse);
 

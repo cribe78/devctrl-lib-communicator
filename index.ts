@@ -7,3 +7,5 @@ export * from "./HTTPCommunicator";
 export * from "./DummyCommunicator";
 export * from "./JSONRPCCommunicator";
 export * from "./JSONRPCCommand";
+export * from "./IDCCommand";
+export * from "./IDCExpectedResponse";

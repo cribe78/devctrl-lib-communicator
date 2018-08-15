@@ -1,6 +1,10 @@
-import {ControlData, Control} from "@devctrl/common";
+import {
+    ControlData,
+    Control,
+    ControlUpdateData
+} from "@devctrl/common";
 import {sprintf} from "sprintf-js";
-let debug = console.log;
+import {IDCCommand} from "./IDCCommand";
 
 export interface IHTTPCommandConfig {
     name: string;
@@ -16,8 +20,9 @@ export interface IHTTPCommandConfig {
 }
 
 
-export class HTTPCommand {
+export class HTTPCommand implements IDCCommand {
     name: string;
+    ctidList : string[];
     cmdPathFunction : (value: any)=>string;
     cmdPathTemplate : string; // A function returning the path or a template to expand
     cmdResponseRE : RegExp;  //
@@ -42,7 +47,7 @@ export class HTTPCommand {
         this.writeonly = !! config.writeonly;
     }
 
-    commandPath(value : any) : string {
+    updateString(control: Control, value : any) : string {
         let path = `/${value}`;   //  Fairly useless default value
         if (this.cmdPathFunction) {
             path = this.cmdPathFunction(value);
@@ -59,11 +64,23 @@ export class HTTPCommand {
     }
 
 
-    getControls() : Control[] {
+    getControlTemplates() : Control[] {
+        this.ctidList = [this.controlData.ctid];
         return [ new Control(this.controlData._id, this.controlData)];
     }
 
-    matchResponse(resp : string) {
+    matchesReport(line: string) {
+        // Standard http based protocols don't feature reports
+        return false;
+    }
+
+    matchQueryResponse(line: string) {
+        // Is this the response that we got? Yes it is!
+        return true;
+    }
+
+
+    matchUpdateResponse(control: Control, request: ControlUpdateData, resp : string) {
         let matches = resp.match(this.cmdResponseRE);
         if (matches) {
             return true;
@@ -72,22 +89,28 @@ export class HTTPCommand {
     }
 
 
-    parseCommandResponse(resp, defaultValue) : any {
-        if (typeof this.cmdResponseParser !== 'function') {
-            return defaultValue;
-        }
 
-        let ret = this.cmdResponseParser(resp);
-        //debug(`HTTPCommand parsed value: ${ret}`);
-        return ret;
-    }
-
-    parseQueryResponse(resp) : any {
+    parseQueryResponse(control: Control, resp: string) : any {
         let val;
         if (typeof this.cmdQueryResponseParseFn == 'function') {
             val = this.cmdQueryResponseParseFn(resp);
         }
         return val;
+    }
+
+    parseReportValue(control: Control, line: string) {
+        // Reports not implemented for http protocol
+        return false;
+    }
+
+    parseUpdateResponse(control: Control, update: ControlUpdateData, resp: string) : any {
+        if (typeof this.cmdResponseParser !== 'function') {
+            return update.value;
+        }
+
+        let ret = this.cmdResponseParser(resp);
+        //debug(`HTTPCommand parsed value: ${ret}`);
+        return ret;
     }
 
     parseValue(value) : any {
@@ -114,7 +137,7 @@ export class HTTPCommand {
         return value;
     }
 
-    queryPath() {
+    queryString() {
         return this.cmdQueryPath;
     }
 
