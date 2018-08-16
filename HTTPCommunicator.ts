@@ -82,6 +82,7 @@ export class HTTPCommunicator extends EndpointCommunicator {
     }
 
     getControlTemplates() : IndexedDataSet<Control> {
+        //TODO: figure out why the command list isn't built in the constructor
         this.buildCommandList();
 
         for (let cmd in this.commands) {
@@ -103,7 +104,7 @@ export class HTTPCommunicator extends EndpointCommunicator {
      */
     handleControlUpdateRequest(update: ControlUpdateData) {
         let control = this.controls[update.control_id];
-        let command = this.commands[control.ctid];
+        let command = this.commandsByTemplate[control.ctid];
 
         if (! command) {
             this.log(`No command found for control ${control.name}`);

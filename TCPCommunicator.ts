@@ -14,7 +14,6 @@ import {IDCExpectedResponse} from "./IDCExpectedResponse";
 
 export type TCPCommEncoding = "string" | "hex";
 
-//TODO: convert expectedResponse from an array to a proper object
 
 export class TCPCommunicator extends EndpointCommunicator {
     socket: net.Socket;

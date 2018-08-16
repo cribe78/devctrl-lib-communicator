@@ -11,6 +11,8 @@ import {
 export interface IDCCommand {
     ctidList : string[];  // A list of the control template IDs for this command
     name : string; // A unique name for the command.  Used for logging
+    writeonly : boolean; // A writeonly command cannot be queried
+
 
     /**
     * Get an array of "control templates" from the command.  Each control template will correspond to a Control object
@@ -36,10 +38,5 @@ export interface IDCCommand {
      * @returns {string} The string to send to the endpoint
      */
     updateString(control: Control, update: ControlUpdateData) : string;
-    writeonly : boolean; // A writeonly command cannot be queried
 
-
-    //TODO: remove these functions from the interface and replace them with matching functions
-    //queryResponseMatchString() : string | RegExp;
-    //updateResponseMatchString(request: ControlUpdateData) : string;
 }
