@@ -17,10 +17,17 @@ export interface IHTTPCommandConfig {
     controlData: ControlData;
     readonly?: boolean;
     writeonly?: boolean;
+    updateMethod?: string;
+    queryMethod?: string;
+}
+
+export interface IDCHTTPCommand extends IDCCommand {
+    updateMethod: string;
+    queryMethod: string;
 }
 
 
-export class HTTPCommand implements IDCCommand {
+export class HTTPCommand implements IDCHTTPCommand {
     name: string;
     ctidList : string[];
     cmdPathFunction : (value: any)=>string;
@@ -30,6 +37,8 @@ export class HTTPCommand implements IDCCommand {
     cmdQueryPath : string;
     cmdQueryResponseParseFn: (value: string) => any;
     controlData: ControlData;
+    updateMethod: string;
+    queryMethod: string;
     readonly: boolean;
     writeonly: boolean;
 
@@ -42,6 +51,8 @@ export class HTTPCommand implements IDCCommand {
         this.cmdQueryPath = config.cmdQueryPath;
         this.cmdQueryResponseParseFn = config.cmdQueryResponseParseFn;
         this.controlData = config.controlData;
+        this.updateMethod = config.updateMethod ? config.updateMethod : "GET";
+        this.queryMethod = config.queryMethod ? config.queryMethod : "GET";
 
         this.readonly = !! config.readonly;
         this.writeonly = !! config.writeonly;

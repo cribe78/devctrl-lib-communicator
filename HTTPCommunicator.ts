@@ -5,13 +5,16 @@ import {
     IndexedDataSet
 } from "@devctrl/common";
 import {EndpointCommunicator, IEndpointCommunicatorConfig} from "./EndpointCommunicator";
-import {HTTPCommand} from "./HTTPCommand";
+import {HTTPCommand, IDCHTTPCommand} from "./HTTPCommand";
 import * as http from "http";
 import {IDCCommand} from "./IDCCommand";
 
+
+
+
 export class HTTPCommunicator extends EndpointCommunicator {
-    commands: IndexedDataSet<IDCCommand> = {};
-    commandsByTemplate: IndexedDataSet<IDCCommand> = {};
+    commands: IndexedDataSet<IDCHTTPCommand> = {};
+    commandsByTemplate: IndexedDataSet<IDCHTTPCommand> = {};
     pollTimer;
     endpointPassword = "";
     endpointUser = "";
@@ -32,7 +35,7 @@ export class HTTPCommunicator extends EndpointCommunicator {
 
     };
 
-    executeCommandQuery(cmd: IDCCommand) {
+    executeCommandQuery(cmd: IDCHTTPCommand) {
         if (cmd.writeonly) {
             this.log(`not querying writeonly command ${cmd.name}`, EndpointCommunicator.LOG_POLLING);
         }
@@ -44,7 +47,7 @@ export class HTTPCommunicator extends EndpointCommunicator {
             hostname: this.config.endpoint.address,
             port: this.config.endpoint.port,
             path: cmd.queryString(),
-            method: "GET",
+            method: cmd.queryMethod,
             headers: {
 
             },
@@ -118,7 +121,7 @@ export class HTTPCommunicator extends EndpointCommunicator {
             hostname: this.config.endpoint.address,
             port: this.config.endpoint.port,
             path: command.updateString(control, update.value),
-            method: "GET",
+            method: command.updateMethod,
             headers: {
 
             },
