@@ -6,6 +6,7 @@
         Endpoint,
         IndexedDataSet
     } from "@devctrl/common";
+    import {CommsLogger} from "./logging/CommsLogger";
 
     export interface ICommunicatorProtoPackage {
         communicators: {
@@ -17,6 +18,7 @@
         endpoint: Endpoint
         controlUpdateCallback: (control: Control, value: any) => void;
         statusUpdateCallback: () => void;
+        logDir: string;
     }
 
     export interface IEndpointCommunicator {
@@ -48,10 +50,16 @@
         protected lastLogMsg = "";
         protected lastLogTime = 0;
         protected lastLogCount = 0;
+        protected commsLogger: CommsLogger;
 
         constructor(config: IEndpointCommunicatorConfig) {
             this.config = config;
             this.epStatus = this.config.endpoint.epStatus;
+
+            this.commsLogger = new CommsLogger({
+              endpointId: this.config.endpoint.id,
+              logDir: this.config.logDir
+            });
         }
 
 
